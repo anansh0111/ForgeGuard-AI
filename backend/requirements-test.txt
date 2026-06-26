@@ -1,0 +1,7 @@
+# Test-only dependencies (not installed in production Docker image)
+# Install with: pip install -r requirements-test.txt
+pytest==8.2.0
+pytest-asyncio==0.23.6
+httpx==0.27.0
+anyio==4.3.0
+# SQLite support for in-memory test DB is built into Python — no extra package needed

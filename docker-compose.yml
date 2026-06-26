@@ -1,0 +1,76 @@
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: forgeguard_postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-forgeguard}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-forgeguard_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-forgeguard_db}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-forgeguard} -d ${POSTGRES_DB:-forgeguard_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - forgeguard_net
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: forgeguard_backend
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-forgeguard}:${POSTGRES_PASSWORD:-forgeguard_secret}@postgres:5432/${POSTGRES_DB:-forgeguard_db}
+      ENV: production
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./ml:/app/ml:ro
+    networks:
+      - forgeguard_net
+    restart: unless-stopped
+
+  simulator:
+    build:
+      context: ./simulator
+      dockerfile: Dockerfile
+    container_name: forgeguard_simulator
+    environment:
+      BACKEND_URL: http://backend:8000
+      INTERVAL_SECONDS: ${SIMULATOR_INTERVAL:-5}
+    depends_on:
+      - backend
+    networks:
+      - forgeguard_net
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+    container_name: forgeguard_frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - forgeguard_net
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+
+networks:
+  forgeguard_net:
+    driver: bridge
